@@ -14,91 +14,92 @@ import (
 
 type Server struct {
 	Ctx       context.Context
-	DnsServer dns.Server
-	DohClient dohclient.DohCli
-	Cacher    cacher.Cacher
+	DnsServer *dns.Server
+	DohClient *dohclient.DohCli
+	Cacher    *cacher.Cacher
 }
 
-type answerMap map[cacher.Key][]string
+func New(ctx context.Context, dnsserver *dns.Server, dohcli *dohclient.DohCli, cacher *cacher.Cacher) *Server {
+	return &Server{
+		Ctx:       ctx,
+		DnsServer: dnsserver,
+		DohClient: dohcli,
+		Cacher:    cacher,
+	}
+}
 
-// func (s *Server) RR(dName, t, v string) (dns.RR, error) {
-// 	return dns.NewRR(fmt.Sprintf("%s %s %d", dName, t, v))
-// }
+func NewDNSServer() *dns.Server {
+	return &dns.Server{
+		Addr: "192.168.1.40:5300",
+		Net:  "udp",
+	}
+}
+
+func NewRR(dName, t, v string) (dns.RR, error) {
+	return dns.NewRR(fmt.Sprintf("%s %s %s", dName, t, v))
+}
+
+type typeRRMap map[uint16]string
+
+var rrMap = typeRRMap{
+	1:  "A",
+	28: "AAAA",
+}
 
 func (s *Server) Worker(m *dns.Msg) error {
 	for _, q := range m.Question {
 		switch q.Qtype {
-		case dns.TypeA:
-			log.Printf("query for %s (TypeA)\n ", q.Name)
-			k := cacher.NewKey(q.Name, "A", -1)
-			ip, err := s.Cacher.Get(k)
-			if err == nil {
-				rr, err := dns.NewRR(fmt.Sprintf("%s A %s", q.Name, ip))
-				if err == nil {
-					m.Answer = append(m.Answer, rr)
-				}
-				return err
+		case dns.TypeA, dns.TypeAAAA:
+			t, ok := rrMap[q.Qtype]
+			if !ok {
+				return fmt.Errorf("not support type:%d", q.Qtype)
 			}
-		case dns.TypeAAAA:
-			log.Printf("query for %s (TypeAAAA)\n ", q.Name)
-			k := cacher.NewKey(q.Name, "AAAA", -1)
-			ip, err := s.Cacher.Get(k)
-			if err == nil {
-				rr, err := dns.NewRR(fmt.Sprintf("%s AAAA %s", q.Name, ip))
-				if err == nil {
-					m.Answer = append(m.Answer, rr)
-				}
-				return err
-			}
-		default:
-			log.Println("DoH query")
-			dom := dohdns.Domain(q.Name)
-			dohAnswers, err := s.DohClient.GetAnswer(s.Ctx, dom)
+			k := cacher.NewKey(q.Name, t, -1)
+			v, err := s.Cacher.Get(k)
 			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to get DoH answer for %s", dom))
+				return err
 			}
-			for _, ans := range dohAnswers {
-				switch ans.Type {
-				case int(dns.TypeA):
-					log.Printf("query for %s (TypeA)\n ", q.Name)
-					k := cacher.NewKey(q.Name, "A", -1)
-					ip, err := s.Cacher.Get(k)
-					if err == nil {
-						rr, err := dns.NewRR(fmt.Sprintf("%s A %s", q.Name, ip))
-						if err == nil {
-							m.Answer = append(m.Answer, rr)
-						}
-						return err
-					}
-				case int(dns.TypeAAAA):
-					log.Printf("query for %s (TypeAAAA)\n ", q.Name)
-					k := cacher.NewKey(q.Name, "AAAA", -1)
-					ip, err := s.Cacher.Get(k)
-					if err == nil {
-						rr, err := dns.NewRR(fmt.Sprintf("%s AAAA %s", q.Name, ip))
-						if err == nil {
-							m.Answer = append(m.Answer, rr)
-						}
-						return err
-					}
+			if v != "" {
+				// found cache
+				rr, err := NewRR(q.Name, t, v)
+				if err != nil {
+					return errors.Wrapf(err, "NewRR failed key: %s, type: %s, value: %s", q.Name, t, v)
 				}
-
+				m.Answer = append(m.Answer, rr)
 			}
-
+			// DoH
+			answers, err := s.DohClient.GetAnswer(s.Ctx, dohdns.Domain(q.Name))
+			if err != nil {
+				return err
+			}
+			for _, answer := range answers {
+				t, ok := rrMap[uint16(answer.Type)]
+				if !ok {
+					log.Println("unsportted type", t)
+					continue
+				}
+				rr, err := NewRR(answer.Name, t, answer.Data)
+				if err != nil {
+					return errors.Wrapf(err, "NewRR failed key: %s, type: %s, value: %s", answer.Name, t, answer.Data)
+				}
+				key := cacher.NewKey(answer.Name, t, answer.TTL)
+				s.Cacher.Set(key, answer.Data, answer.TTL)
+				m.Answer = append(m.Answer, rr)
+			}
 		}
 	}
 	return nil
 }
 
-// // func handleDnsRequest(w dns.ResponseWriter, r *dns.Msg) {
-// 	m := new(dns.Msg)
-// 	m.SetReply(r)
-// 	m.Compress = false
+func (s *Server) HandleDnsRequest(w dns.ResponseWriter, r *dns.Msg) {
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Compress = false
 
-// 	switch r.Opcode {
-// 	case dns.OpcodeQuery:
-// 		parseQuery(m)
-// 	}
+	switch r.Opcode {
+	case dns.OpcodeQuery:
+		s.Worker(m)
+	}
 
-// 	w.WriteMsg(m)
-// }
+	w.WriteMsg(m)
+}

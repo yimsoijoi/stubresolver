@@ -15,24 +15,25 @@ type RedisCli struct {
 	Ctx context.Context
 }
 
-func New() *RedisCli {
+func New(ctx context.Context) *RedisCli {
 	cli := redis.NewClient(&redis.Options{DB: 1})
 	return &RedisCli{
 		Cli: cli,
+		Ctx: ctx,
 	}
 }
 
-func (r *RedisCli) Get(key string) ([]string, error) {
+func (r *RedisCli) Get(key string) (string, error) {
 	val, err := r.Cli.Get(r.Ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
-		return nil, errors.Wrap(err, "Redis cache missed for key")
+		return "", errors.Wrap(err, "Redis cache missed for key")
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get from Redis")
+		return "", errors.Wrap(err, "failed to get from Redis")
 	}
-	var answers []string
+	var answers string
 	if err := json.Unmarshal([]byte(val), &answers); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal value from Redis")
+		return "", errors.Wrap(err, "failed to unmarshal value from Redis")
 	}
 	return answers, nil
 }

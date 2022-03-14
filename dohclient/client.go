@@ -2,27 +2,27 @@ package dohclient
 
 import (
 	"context"
-	"log"
 
 	"github.com/likexian/doh-go"
 	dohdns "github.com/likexian/doh-go/dns"
+	"github.com/pkg/errors"
 )
 
-type dohCli struct {
+type DohCli struct {
 	Dcli *doh.DoH
 }
 
-func New() *dohCli {
+func New() *DohCli {
 	client := doh.Use(doh.GoogleProvider, doh.CloudflareProvider)
-	return &dohCli{
+	return &DohCli{
 		Dcli: client,
 	}
 }
 
-func (d *dohCli) GetAnswer(ctx context.Context, dName dohdns.Domain) []dohdns.Answer {
+func (d *DohCli) GetAnswer(ctx context.Context, dName dohdns.Domain) ([]dohdns.Answer, error) {
 	resp, err := d.Dcli.Query(ctx, dohdns.Domain(dName), dohdns.TypeA)
 	if err != nil {
-		log.Println("failed to query", err.Error())
+		return nil, errors.Wrapf(err, "failed to get response from DoHdns", dName)
 	}
-	return resp.Answer
+	return resp.Answer, nil
 }
