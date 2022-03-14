@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/miekg/dns"
 	"github.com/yimsoijoi/stubresolver/cacher"
@@ -19,7 +20,10 @@ func main() {
 	server := dnsserver.New(ctx, dnsServer, dohClient, cacher)
 
 	dns.HandleFunc(".", server.HandleDnsRequest)
-
+	log.Println("Starting stubborn DNS resolver on localhost:5300")
+	if err := server.DnsServer.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // client := doh.Use(doh.GoogleProvider, doh.CloudflareProvider)

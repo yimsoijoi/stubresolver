@@ -20,7 +20,7 @@ func New() *DohCli {
 }
 
 func (d *DohCli) GetAnswer(ctx context.Context, dName dohdns.Domain) ([]dohdns.Answer, error) {
-	resp, err := d.Dcli.Query(ctx, dohdns.Domain(dName), dohdns.TypeA)
+	resp, err := d.Dcli.Query(ctx, dohdns.Domain(dName), dohdns.TypeANY)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get response from DoHdns", dName)
 	}

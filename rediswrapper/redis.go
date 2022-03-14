@@ -42,8 +42,9 @@ func (r *RedisCli) Set(key, val string, ttl int) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal value")
 	}
+	dur := time.Second * time.Duration(ttl)
 	valStr := string(valJson)
-	if _, err := r.Cli.Set(r.Ctx, key, valStr, time.Duration(ttl)).Result(); err != nil {
+	if _, err := r.Cli.Set(r.Ctx, key, valStr, dur).Result(); err != nil {
 		log.Println("failed to set redis", key, val)
 	}
 	return nil

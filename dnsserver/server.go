@@ -30,7 +30,7 @@ func New(ctx context.Context, dnsserver *dns.Server, dohcli *dohclient.DohCli, c
 
 func NewDNSServer() *dns.Server {
 	return &dns.Server{
-		Addr: "192.168.1.40:5300",
+		Addr: "127.0.0.1:5300",
 		Net:  "udp",
 	}
 }
@@ -48,25 +48,23 @@ var rrMap = typeRRMap{
 
 func (s *Server) Worker(m *dns.Msg) error {
 	for _, q := range m.Question {
-		switch q.Qtype {
-		case dns.TypeA, dns.TypeAAAA:
-			t, ok := rrMap[q.Qtype]
-			if !ok {
-				return fmt.Errorf("not support type:%d", q.Qtype)
-			}
-			k := cacher.NewKey(q.Name, t, -1)
-			v, err := s.Cacher.Get(k)
+		t, ok := rrMap[q.Qtype]
+		if !ok {
+			continue
+		}
+		k := cacher.NewKey(q.Name, t, -1)
+		v, err := s.Cacher.Get(k)
+		if err != nil {
+			log.Println("Cache missed")
+		}
+		if v != "" {
+			// found cache
+			rr, err := NewRR(q.Name, t, v)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "NewRR failed key: %s, type: %s, value: %s", q.Name, t, v)
 			}
-			if v != "" {
-				// found cache
-				rr, err := NewRR(q.Name, t, v)
-				if err != nil {
-					return errors.Wrapf(err, "NewRR failed key: %s, type: %s, value: %s", q.Name, t, v)
-				}
-				m.Answer = append(m.Answer, rr)
-			}
+			m.Answer = append(m.Answer, rr)
+		} else {
 			// DoH
 			answers, err := s.DohClient.GetAnswer(s.Ctx, dohdns.Domain(q.Name))
 			if err != nil {
