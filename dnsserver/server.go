@@ -44,6 +44,7 @@ type typeRRMap map[uint16]string
 var rrMap = typeRRMap{
 	1:  "A",
 	28: "AAAA",
+	5:  "CNAME",
 }
 
 func (s *Server) Worker(m *dns.Msg) error {
