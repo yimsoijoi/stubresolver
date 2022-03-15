@@ -1,0 +1,11 @@
+dnsserver:
+  addr: "127.0.0.1:5300"
+  protocal: "udp"
+
+redis:
+  address:
+  username:
+  password:
+  db: 1
+
+  

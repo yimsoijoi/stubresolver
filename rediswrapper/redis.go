@@ -11,12 +11,13 @@ import (
 )
 
 type RedisCli struct {
-	Cli *redis.Client
-	Ctx context.Context
+	Cli  *redis.Client
+	Ctx  context.Context
+	Conf *Config
 }
 
-func New(ctx context.Context) *RedisCli {
-	cli := redis.NewClient(&redis.Options{DB: 1})
+func New(ctx context.Context, conf Config) *RedisCli {
+	cli := redis.NewClient(&redis.Options{DB: conf.DB})
 	return &RedisCli{
 		Cli: cli,
 		Ctx: ctx,

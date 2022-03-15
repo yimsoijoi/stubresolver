@@ -28,10 +28,10 @@ func New(ctx context.Context, dnsserver *dns.Server, dohcli *dohclient.DohCli, c
 	}
 }
 
-func NewDNSServer() *dns.Server {
+func NewDNSServer(conf Config) *dns.Server {
 	return &dns.Server{
-		Addr: "127.0.0.1:5300",
-		Net:  "udp",
+		Addr: conf.Address,
+		Net:  conf.Protocol,
 	}
 }
 

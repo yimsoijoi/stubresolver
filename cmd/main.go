@@ -5,17 +5,23 @@ import (
 	"log"
 
 	"github.com/miekg/dns"
+	"github.com/pkg/errors"
 	"github.com/yimsoijoi/stubresolver/cacher"
+	"github.com/yimsoijoi/stubresolver/config"
 	"github.com/yimsoijoi/stubresolver/dnsserver"
 	"github.com/yimsoijoi/stubresolver/dohclient"
 	"github.com/yimsoijoi/stubresolver/rediswrapper"
 )
 
 func main() {
+	conf, err := config.Load()
+	if err != nil {
+		errors.Wrap(err, "failed to load config")
+	}
 	ctx := context.Background()
-	redisCli := rediswrapper.New(ctx)
+	redisCli := rediswrapper.New(ctx, conf.RedisConfig)
 	cacher := cacher.New(redisCli)
-	dnsServer := dnsserver.NewDNSServer()
+	dnsServer := dnsserver.NewDNSServer(conf.DnsserverConfig)
 	dohClient := dohclient.New()
 	server := dnsserver.New(ctx, dnsServer, dohClient, cacher)
 
